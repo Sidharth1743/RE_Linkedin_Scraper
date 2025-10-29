@@ -1,0 +1,13 @@
+# LinkedIn Scraper Dependencies
+
+# Web Framework
+Flask
+
+# Web Automation
+playwright
+
+# HTTP Requests
+requests
+
+# Environment Variables
+python-dotenv

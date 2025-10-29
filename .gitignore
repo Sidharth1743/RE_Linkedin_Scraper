@@ -35,6 +35,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Flask
+instance/
+.webassets-cache
+flask_session/
+
 # Virtual Environment
 venv/
 env/
@@ -96,3 +101,4 @@ cookies.txt
 session.json
 auth_token.txt
 credentials.json
+tracked_users.json

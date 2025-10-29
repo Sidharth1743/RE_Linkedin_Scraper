@@ -1292,8 +1292,170 @@ class LinkedInActivityFetcher:
             print(f"❌ Error parsing ranges: {e}")
             return []
 
+    def run_scrape(self, target_username: str, target_range: int):
+        """
+        Programmatic scraping function for web app integration
+
+        Args:
+            target_username: LinkedIn username or profile URL
+            target_range: Target number of posts (e.g., 60, 80, 100)
+
+        Returns:
+            Tuple of (success: bool, session_dir: str or None, error: str or None)
+        """
+        try:
+            print("="*80)
+            print("🔗 LinkedIn Profile Activity Fetcher (Web App Mode)")
+            print("   Extracts profileUrn and fetches activity using GraphQL API")
+            print("="*80)
+
+            # Initialize Playwright
+            self.p = sync_playwright().start()
+            print("✅ Playwright started")
+
+            # Login to LinkedIn
+            if not self.login_to_linkedin():
+                return False, None, "Login failed"
+
+            print("\n✅ Successfully logged in to LinkedIn")
+
+            # Validate username
+            if not target_username:
+                return False, None, "Username cannot be empty"
+
+            # Extract profileUrn
+            profile_urn = self.extract_profile_urn(target_username)
+
+            if not profile_urn:
+                return False, None, "Failed to extract profileUrn"
+
+            print("\n" + "="*80)
+            print("✅ SUCCESSFULLY EXTRACTED PROFILE URN")
+            print("="*80)
+            print(f"\n🔗 {profile_urn}\n")
+
+            # Parse and auto-generate ranges
+            ranges = self.parse_ranges(str(target_range))
+
+            if not ranges:
+                return False, None, f"Failed to parse target range: {target_range}"
+
+            print(f"\n✅ Generated {len(ranges)} ranges to fetch:")
+            for idx, (start, end) in enumerate(ranges, 1):
+                print(f"   {idx}. Range {start}-{end}")
+
+            # Create session-specific output directory
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_username = target_username.replace('/', '_').replace(':', '_').replace('https___www.linkedin.com_in_', '')
+            target_range_str = f"0-{ranges[-1][1]}"
+            session_dir_name = f"{safe_username}_{target_range_str}_{timestamp}"
+            self.session_dir = os.path.join("linkedin_data", session_dir_name)
+            os.makedirs(self.session_dir, exist_ok=True)
+
+            print(f"\n📁 Session directory created: {self.session_dir}")
+
+            # Track pagination token and saved files
+            pagination_token = None
+            saved_files = []
+
+            # Fetch each range
+            for idx, (start, end) in enumerate(ranges, 1):
+                count = end - start
+
+                print("\n" + "="*80)
+                print(f"📄 FETCHING RANGE {idx}: {start}-{end} (count={count})")
+                print("="*80)
+
+                if idx == 1:
+                    print("   Using API without pagination token (first request)")
+                    activity_data = self.fetch_profile_activity(
+                        profile_urn,
+                        count=count,
+                        start=start,
+                        pagination_token=None
+                    )
+                else:
+                    if not pagination_token:
+                        print("❌ No pagination token from previous response!")
+                        break
+
+                    print(f"   Using pagination token from previous response")
+                    activity_data = self.fetch_profile_activity(
+                        profile_urn,
+                        count=count,
+                        start=start,
+                        pagination_token=pagination_token
+                    )
+
+                if not activity_data:
+                    print(f"❌ Failed to fetch range {start}-{end}")
+                    break
+
+                print(f"✅ Successfully fetched range {start}-{end}")
+
+                # Save to file
+                range_str = f"{start}-{end}"
+                filepath = self.save_activity_data(
+                    target_username,
+                    profile_urn,
+                    activity_data,
+                    page=idx,
+                    range_str=range_str
+                )
+
+                if filepath:
+                    saved_files.append((range_str, filepath))
+
+                # Extract pagination token for next request
+                pagination_token = self.extract_pagination_token(activity_data)
+
+                if not pagination_token and idx < len(ranges):
+                    print(f"⚠️ No pagination token found in response")
+                    break
+
+                time.sleep(1)
+
+            print("\n" + "="*80)
+            print("✅ RANGE FETCHING COMPLETED")
+            print("="*80)
+
+            # Extract individual posts from all fetched files
+            total_posts, all_posts_data = self.process_posts_from_files(saved_files, target_username)
+
+            # Download media files automatically
+            if all_posts_data:
+                self.download_media_for_posts(all_posts_data, self.session_dir)
+
+            # Final summary
+            print("\n" + "="*80)
+            print("🎉 ALL TASKS COMPLETED SUCCESSFULLY")
+            print("="*80)
+            print(f"\n📊 Final Summary:")
+            print(f"   - Ranges fetched: {len(saved_files)}")
+            print(f"   - Total posts extracted: {total_posts}")
+            print(f"\n📁 Session directory: {self.session_dir}/")
+
+            return True, self.session_dir, None
+
+        except KeyboardInterrupt:
+            print("\n⚠️ Process interrupted by user")
+            return False, None, "Process interrupted by user"
+        except Exception as e:
+            error_msg = f"Unexpected error: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, None, error_msg
+        finally:
+            # Always close Playwright
+            print("\n🔄 Cleaning up...")
+            self.close()
+            if self.p:
+                self.p.stop()
+                print("✅ Playwright stopped")
+
     def run(self):
-        """Main execution function"""
+        """Main execution function (interactive CLI mode)"""
         try:
             print("="*80)
             print("🔗 LinkedIn Profile Activity Fetcher")
