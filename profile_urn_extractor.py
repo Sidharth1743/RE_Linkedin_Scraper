@@ -130,7 +130,7 @@ class LinkedInScraper:
             
             print("🌐 Launching browser...")
             self.browser = self.p.chromium.launch(
-                headless=False,
+                headless=True,
                 slow_mo=200,
                 args=[
                     '--disable-blink-features=AutomationControlled',
