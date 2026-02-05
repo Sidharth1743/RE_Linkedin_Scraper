@@ -4,7 +4,6 @@
 Flask
 
 # Web Automation
-playwright
 
 # HTTP Requests
 requests

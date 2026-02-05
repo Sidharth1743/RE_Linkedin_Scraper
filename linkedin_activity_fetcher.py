@@ -135,7 +135,7 @@ class LinkedInActivityFetcher:
 
             print("🌐 Launching browser...")
             self.browser = self.p.chromium.launch(
-                headless=True,
+                headless=False,
                 slow_mo=200,
                 args=[
                     '--disable-blink-features=AutomationControlled',
