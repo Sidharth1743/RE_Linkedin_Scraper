@@ -403,7 +403,7 @@ class LinkedInActivityFetcher:
             print(f"❌ Error extracting pagination token: {e}")
             return None
 
-    def fetch_profile_activity(self, profile_urn: str, count: int = 20, start: int = 0, pagination_token: Optional[str] = None) -> Optional[dict]:
+    def fetch_profile_activity(self, profile_urn: str, count: int = 20, start: int = 0, pagination_token: Optional[str] = None, max_retries: int = 3) -> Optional[dict]:
         """
         Fetch profile activity using the GraphQL API - using same method as test/request_sender.py
 
@@ -486,23 +486,30 @@ class LinkedInActivityFetcher:
             print(f"   URL: {url[:100]}...")
             print(f"   CSRF Token: {csrf_token[:20]}..." if csrf_token else "   CSRF Token: (empty)")
 
-            # Make the request exactly like test/request_sender.py
-            response = requests.get(url, headers=headers, cookies=cookies)
-
-            print(f"   Status Code: {response.status_code}")
-
-            if response.status_code == 200:
-                print("✅ Successfully fetched profile activity!")
+            # Make the request with simple retry for transient disconnects
+            for attempt in range(1, max_retries + 1):
                 try:
-                    return response.json()
-                except Exception as json_error:
-                    print(f"⚠️ Error parsing JSON: {json_error}")
-                    print(f"   Response text: {response.text[:200]}...")
-                    return None
-            else:
-                print(f"❌ API request failed with status {response.status_code}")
-                print(f"   Response: {response.text[:500]}...")
-                return None
+                    response = requests.get(url, headers=headers, cookies=cookies)
+                    print(f"   Status Code: {response.status_code}")
+
+                    if response.status_code == 200:
+                        print("✅ Successfully fetched profile activity!")
+                        try:
+                            return response.json()
+                        except Exception as json_error:
+                            print(f"⚠️ Error parsing JSON: {json_error}")
+                            print(f"   Response text: {response.text[:200]}...")
+                            return None
+                    else:
+                        print(f"❌ API request failed with status {response.status_code}")
+                        print(f"   Response: {response.text[:500]}...")
+                        return None
+                except Exception as e:
+                    if attempt >= max_retries:
+                        raise
+                    sleep_s = 1 + attempt
+                    print(f"⚠️ Request error: {e} (retry {attempt}/{max_retries} in {sleep_s}s)")
+                    time.sleep(sleep_s)
 
         except Exception as e:
             print(f"❌ Error fetching profile activity: {e}")
@@ -706,16 +713,16 @@ class LinkedInActivityFetcher:
                 post_info['share_urn'] = metadata.get('shareUrn', '')
 
                 # Post text from commentary
-                commentary = item.get('commentary', {})
-                text_obj = commentary.get('text', {})
+                commentary = item.get('commentary') or {}
+                text_obj = (commentary.get('text') or {}) if isinstance(commentary, dict) else {}
                 post_info['post_text'] = text_obj.get('text', '')
 
                 # Post URL
-                social_content = item.get('socialContent', {})
+                social_content = item.get('socialContent') or {}
                 post_info['post_url'] = social_content.get('shareUrl', '')
 
                 # Author information from actor
-                actor = item.get('actor', {})
+                actor = item.get('actor') or {}
                 post_info['author_profile_urn'] = ''
 
                 # Try to extract author profile URN from actor image
@@ -732,14 +739,14 @@ class LinkedInActivityFetcher:
                     pass
 
                 # Actor name and description
-                actor_name = actor.get('name', {})
+                actor_name = actor.get('name') or {}
                 post_info['author_name'] = actor_name.get('text', '') if isinstance(actor_name, dict) else ''
 
-                actor_description = actor.get('description', {})
+                actor_description = actor.get('description') or {}
                 post_info['author_headline'] = actor_description.get('text', '') if isinstance(actor_description, dict) else ''
 
                 # Navigation URL (author profile link)
-                nav_context = actor.get('navigationContext', {})
+                nav_context = actor.get('navigationContext') or {}
                 post_info['author_profile_url'] = nav_context.get('actionTarget', '')
 
                 # Extract video URL (640p preferred, fallback to 720p)

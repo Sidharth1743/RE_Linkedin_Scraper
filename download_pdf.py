@@ -177,11 +177,16 @@ def main():
             print("❌ Failed to initialize session")
             return
 
-        # 2. Target Profiles
-        targets = [
-            "luka-pataky",
-            "sidharthan-kannan-1819i"
-        ]
+        # 2. Target Profiles (user input)
+        raw_targets = input("\n📝 Enter LinkedIn username or profile URL (comma-separated for multiple): ").strip()
+        if not raw_targets:
+            print("❌ No targets provided")
+            return
+
+        targets = [t.strip() for t in raw_targets.split(",") if t.strip()]
+        if not targets:
+            print("❌ No valid targets provided")
+            return
         
         results = []
 

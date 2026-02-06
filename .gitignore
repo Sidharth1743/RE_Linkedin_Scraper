@@ -102,3 +102,5 @@ session.json
 auth_token.txt
 credentials.json
 tracked_users.json
+output/
+linkedin_session.json
